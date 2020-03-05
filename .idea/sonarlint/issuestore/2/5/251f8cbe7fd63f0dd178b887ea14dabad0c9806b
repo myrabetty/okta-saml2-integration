@@ -1,0 +1,7 @@
+
+Osquid:S1172S",Remove this unused method parameter "group".(¨Ç¤æùÿÿÿÿ8ã¹ä°Š.
+Jsquid:S1481:",Remove this unused "baseUrl" local variable.(à¸½ë8ÖÜË‡ˆ.
+{squid:UselessImportCheck"KRemove this unused import 'javax.xml.parsers.ParserConfigurationException'.(ûıƒøÿÿÿÿ8°¡æ°Š.
+ksquid:S00112¤"FDefine and throw a dedicated exception instead of using a generic one.(¼ÿ¾¹ÿÿÿÿÿ8¦¤Ï­ˆ.
+Ysquid:S1854:";Remove this useless assignment to local variable "baseUrl".(à¸½ë8ÖÜË‡ˆ.
+esquid:UselessImportCheck"5Remove this unused import 'org.xml.sax.SAXException'.(ü…ãşÿÿÿÿ8Ïáå°Š.
