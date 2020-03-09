@@ -10,13 +10,10 @@ import org.springframework.web.servlet.ModelAndView;
 @Controller
 public class IndexController {
 
-    @Autowired
-    private WebConfig webConfig;
-
     @GetMapping("/")
     public ModelAndView index() throws UnmarshallingException, XMLParserException {
         ModelAndView map = new ModelAndView("index");
-        map.addObject("groups", webConfig.getUserGroups());
+        map.addObject("groups");
         return map;
     }
 }

@@ -2,31 +2,29 @@ package com.example.demo;
 
 import org.apache.log4j.Logger;
 import org.opensaml.core.xml.XMLObject;
-import org.opensaml.core.xml.io.Unmarshaller;
-import org.opensaml.core.xml.io.UnmarshallerFactory;
-import org.opensaml.core.xml.io.UnmarshallingException;
 import org.opensaml.core.xml.schema.impl.XSStringImpl;
+import org.opensaml.saml.saml2.core.Assertion;
 import org.opensaml.saml.saml2.core.Attribute;
-import org.opensaml.saml.saml2.core.Response;
-import org.opensaml.xml.parse.BasicParserPool;
-import org.opensaml.xml.parse.XMLParserException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.core.convert.converter.Converter;
 import org.springframework.core.io.Resource;
-import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
+import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.config.annotation.ObjectPostProcessor;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
-import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.config.annotation.web.configurers.saml2.Saml2LoginConfigurer;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.saml2.credentials.Saml2X509Credential;
+import org.springframework.security.saml2.provider.service.authentication.OpenSamlAuthenticationProvider;
 import org.springframework.security.saml2.provider.service.registration.InMemoryRelyingPartyRegistrationRepository;
 import org.springframework.security.saml2.provider.service.registration.RelyingPartyRegistration;
 import org.springframework.security.saml2.provider.service.servlet.filter.Saml2WebSsoAuthenticationFilter;
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
 
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.StringReader;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
@@ -34,23 +32,24 @@ import java.security.PrivateKey;
 import java.security.UnrecoverableEntryException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
-import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.stream.Collectors;
 
-import static org.opensaml.core.xml.config.XMLObjectProviderRegistrySupport.getUnmarshallerFactory;
 import static org.springframework.security.saml2.credentials.Saml2X509Credential.Saml2X509CredentialType.DECRYPTION;
 import static org.springframework.security.saml2.credentials.Saml2X509Credential.Saml2X509CredentialType.SIGNING;
 import static org.springframework.security.saml2.credentials.Saml2X509Credential.Saml2X509CredentialType.VERIFICATION;
 
 @EnableWebSecurity(debug = true)
-@EnableGlobalMethodSecurity(prePostEnabled = true)
 class WebConfig extends WebSecurityConfigurerAdapter {
 
     @Autowired
     Saml2Properties saml2RelyingPartyProperties;
+
     Logger logger = Logger.getLogger(this.getClass().getSimpleName());
 
     RelyingPartyRegistration getSaml2AuthenticationConfiguration() {
+
         //base Url
         String baseUrl = "localhost:8080/login";
         //local registration ID
@@ -77,47 +76,48 @@ class WebConfig extends WebSecurityConfigurerAdapter {
                 .build();
     }
 
-    //see: https://spring.io/blog/2018/03/01/spring-security-saml-and-this-week-s-saml-vulnerability
-
-
-    public List<String> getUserGroups() throws XMLParserException, UnmarshallingException {
-        List<String> groups = new ArrayList<>();
-        Response response = (Response) unmarshal();
-        final List<Attribute> attributes = response.getAssertions().get(0).getAttributeStatements().get(0).getAttributes();
-        attributes.stream().filter(x -> x.getName().equals("groups")).findFirst().map(Attribute::getAttributeValues).ifPresent(x -> x.forEach(y -> groups.add(((XSStringImpl) y).getValue())));
-        return groups;
-    }
-
-    public XMLObject unmarshal() throws UnmarshallingException, XMLParserException {
-        final String s = SecurityContextHolder.getContext().getAuthentication().getCredentials().toString();
-
-        BasicParserPool parser = new BasicParserPool();
-        parser.setNamespaceAware(true);
-
-        StringReader reader = new StringReader(s);
-        Document document = parser.parse(reader);
-
-        UnmarshallerFactory unmarshallerFactory = getUnmarshallerFactory();
-        Element samlElement = document.getDocumentElement();
-        final Unmarshaller unmarshaller = unmarshallerFactory.getUnmarshaller(samlElement);
-        return unmarshaller.unmarshall(samlElement);
-    }
-
     @Override
     protected void configure(HttpSecurity http) throws Exception {
         // @formatter:off
-        http
+        final Saml2LoginConfigurer<HttpSecurity> saml2LoginConfigurer = http
                 .authorizeRequests()
                 .anyRequest().authenticated()
                 .and()
-                .saml2Login()
-                .relyingPartyRegistrationRepository(
+                .saml2Login();
+        saml2LoginConfigurer.relyingPartyRegistrationRepository(
                         new InMemoryRelyingPartyRegistrationRepository(
                                 getSaml2AuthenticationConfiguration()
                         )
                 )
                 .loginProcessingUrl(Saml2WebSsoAuthenticationFilter.DEFAULT_FILTER_PROCESSES_URI);
+
+        ObjectPostProcessor<? extends AuthenticationProvider> converter = new GrantedAuthorityPostProcessor();
+        saml2LoginConfigurer.addObjectPostProcessor(converter);
         // @formatter:on
+    }
+
+    public static class GrantedAuthorityPostProcessor implements ObjectPostProcessor<AuthenticationProvider> {
+
+        private Converter<Assertion, Collection<? extends GrantedAuthority>> authoritiesExtractor =
+                (a -> converter(a));
+
+        public <O extends AuthenticationProvider> O postProcess(O object) {
+            if (object instanceof OpenSamlAuthenticationProvider) {
+                ((OpenSamlAuthenticationProvider) object).setAuthoritiesExtractor(authoritiesExtractor);
+            }
+            return object;
+        }
+
+        public List<GrantedAuthority> converter(Assertion assertion) {
+            final List<Attribute> attributes = assertion.getAttributeStatements().get(0).getAttributes();
+            final List<Attribute> groups = attributes.stream().filter(x -> x.getName().equals("groups")).collect(Collectors.toList());
+            return groups.get(0).getAttributeValues().stream().map(this::newAuthority).collect(Collectors.toList());
+        }
+
+        private SimpleGrantedAuthority newAuthority(XMLObject y) {
+            final String value = ((XSStringImpl) y).getValue();
+            return new SimpleGrantedAuthority(value);
+        }
     }
 
     private Saml2X509Credential getVerificationCertificate() {
