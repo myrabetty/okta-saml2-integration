@@ -13,26 +13,28 @@ public class Saml2Properties {
     private IdentityProvider identityProvider;
     private Signing signing;
 
-
     @Data
     public static class IdentityProvider {
         private String entityId;
         private String ssoUrl;
         private Verification verification;
+    }
 
+    @Data
+    public static class Verification {
+        private Jks jks;
+    }
 
-        @Data
-        public static class Verification {
-            private Resource keyStoreLocation;
-            private String keyStorePassword;
-            private String keyStoreAlias;
-        }
+    @Data
+    public static class Jks {
+        private Resource keyStoreLocation;
+        private String keyStorePassword;
+        private String keyStoreAlias;
     }
 
     @Data
     public static class Signing {
-        private Resource privateKeyLocation;
-        private Resource certificateLocation;
+        private Jks jks;
     }
 }
 
