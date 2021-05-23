@@ -1,13 +1,8 @@
 package com.example.demo;
 
 import org.apache.log4j.Logger;
-import org.opensaml.core.xml.XMLObject;
-import org.opensaml.core.xml.schema.impl.XSStringImpl;
-import org.opensaml.saml.saml2.core.Assertion;
-import org.opensaml.saml.saml2.core.Attribute;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Bean;
-import org.springframework.core.convert.converter.Converter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.config.annotation.ObjectPostProcessor;
@@ -15,13 +10,11 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.annotation.web.configurers.saml2.Saml2LoginConfigurer;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.saml2.credentials.Saml2X509Credential;
-import org.springframework.security.saml2.provider.service.authentication.OpenSamlAuthenticationProvider;
 import org.springframework.security.saml2.provider.service.registration.InMemoryRelyingPartyRegistrationRepository;
 import org.springframework.security.saml2.provider.service.registration.RelyingPartyRegistration;
 import org.springframework.security.saml2.provider.service.servlet.filter.Saml2WebSsoAuthenticationFilter;
+import org.springframework.security.web.authentication.SimpleUrlAuthenticationFailureHandler;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -32,9 +25,6 @@ import java.security.PrivateKey;
 import java.security.UnrecoverableEntryException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
-import java.util.Collection;
-import java.util.List;
-import java.util.stream.Collectors;
 
 import static org.springframework.security.saml2.credentials.Saml2X509Credential.Saml2X509CredentialType.DECRYPTION;
 import static org.springframework.security.saml2.credentials.Saml2X509Credential.Saml2X509CredentialType.SIGNING;
@@ -46,14 +36,16 @@ class WebConfig extends WebSecurityConfigurerAdapter {
     @Autowired
     Saml2Properties saml2RelyingPartyProperties;
 
-    Logger logger = Logger.getLogger(this.getClass().getSimpleName());
+    @Value("${app.base-url}")
+    private String baseUrl;
+
+
+    private static final Logger LOGGER = Logger.getLogger(WebConfig.class);
 
     RelyingPartyRegistration getSaml2AuthenticationConfiguration() {
 
-        //base Url
-        String baseUrl = "localhost:8080/login";
         //local registration ID
-        String registrationId = "simplesamlphp";
+        String registrationId = saml2RelyingPartyProperties.getAudienceUri();
         //remote IDP entity ID
         String idpEntityId = saml2RelyingPartyProperties.getIdentityProvider().getEntityId();
         //remote WebSSO Endpoint - Where to Send AuthNRequests to
@@ -76,11 +68,18 @@ class WebConfig extends WebSecurityConfigurerAdapter {
                 .build();
     }
 
+
     @Override
     protected void configure(HttpSecurity http) throws Exception {
+        // removes csrf protection for the POST from OKTA which happens on the following URI
+        String disableCsrfOn = Saml2WebSsoAuthenticationFilter.DEFAULT_FILTER_PROCESSES_URI + "/" + saml2RelyingPartyProperties.getAudienceUri();
+
+        http.csrf().ignoringAntMatchers(disableCsrfOn);
+
         // @formatter:off
         final Saml2LoginConfigurer<HttpSecurity> saml2LoginConfigurer = http
                 .authorizeRequests()
+                .antMatchers("/error").permitAll()
                 .anyRequest().authenticated()
                 .and()
                 .saml2Login();
@@ -89,36 +88,17 @@ class WebConfig extends WebSecurityConfigurerAdapter {
                                 getSaml2AuthenticationConfiguration()
                         )
                 )
-                .loginProcessingUrl(Saml2WebSsoAuthenticationFilter.DEFAULT_FILTER_PROCESSES_URI);
+                .loginProcessingUrl(Saml2WebSsoAuthenticationFilter.DEFAULT_FILTER_PROCESSES_URI)
+        .failureHandler(new SimpleUrlAuthenticationFailureHandler());
 
+        // adding custom assertion post processor
+        LOGGER.info("Adding custom assertion Post-Processor");
         ObjectPostProcessor<? extends AuthenticationProvider> converter = new GrantedAuthorityPostProcessor();
         saml2LoginConfigurer.addObjectPostProcessor(converter);
         // @formatter:on
     }
 
-    public static class GrantedAuthorityPostProcessor implements ObjectPostProcessor<AuthenticationProvider> {
 
-        private Converter<Assertion, Collection<? extends GrantedAuthority>> authoritiesExtractor =
-                (a -> converter(a));
-
-        public <O extends AuthenticationProvider> O postProcess(O object) {
-            if (object instanceof OpenSamlAuthenticationProvider) {
-                ((OpenSamlAuthenticationProvider) object).setAuthoritiesExtractor(authoritiesExtractor);
-            }
-            return object;
-        }
-
-        public List<GrantedAuthority> converter(Assertion assertion) {
-            final List<Attribute> attributes = assertion.getAttributeStatements().get(0).getAttributes();
-            final List<Attribute> groups = attributes.stream().filter(x -> x.getName().equals("groups")).collect(Collectors.toList());
-            return groups.get(0).getAttributeValues().stream().map(this::newAuthority).collect(Collectors.toList());
-        }
-
-        private SimpleGrantedAuthority newAuthority(XMLObject y) {
-            final String value = ((XSStringImpl) y).getValue();
-            return new SimpleGrantedAuthority(value);
-        }
-    }
 
     private Saml2X509Credential getVerificationCertificate() {
         try {

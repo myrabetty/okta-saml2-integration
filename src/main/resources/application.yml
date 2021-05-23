@@ -1,6 +1,9 @@
 app:
+  base-url: "localhost:8080/login"
   security:
     saml2:
+      # Audience URI (SP (service provider) Entity ID) as defined in okta
+      audience-uri: "simplesamlphp"
       signing:
         jks:
           key-store-location: "classpath:credentials/keystore.jks"
@@ -12,5 +15,11 @@ app:
             key-store-location: "classpath:credentials/keystore.jks"
             key-store-password: "saml2sample"
             key-store-alias: "oktaCertificate"
-        entity-id: http://www.okta.com/exkpxex5ilaUzCuyp0h7
-        sso-url: https://schubergphilis.oktapreview.com/app/schubergphilis_springsecuritysample_1/exkpxex5ilaUzCuyp0h7/sso/saml
+        # these are values provided by okta when registering the application sign-on url as
+        # http://localhost:8080/login/saml2/sso/simplesamlphp
+        # and audience URI simplesamlphp
+        # this url needs to be the same as the url constructed in the WebConfig class
+        # note that the path /saml2/sso is expected as default for registration (see Saml2WebSsoAuthenticationFilter class and its usage in
+        # RelyingPartyRegistration)
+        entity-id: http://www.okta.com/exksg80cpBxmCah0z5d6
+        sso-url: https://dev-68097204.okta.com/app/dev-68097204_saml2sample_1/exksg80cpBxmCah0z5d6/sso/saml

@@ -13,6 +13,8 @@ public class Saml2Properties {
     private IdentityProvider identityProvider;
     private Signing signing;
 
+    public String audienceUri;
+
     @Data
     public static class IdentityProvider {
         private String entityId;
@@ -36,5 +38,6 @@ public class Saml2Properties {
     public static class Signing {
         private Jks jks;
     }
+
 }
 
