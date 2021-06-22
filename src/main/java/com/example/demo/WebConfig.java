@@ -71,25 +71,34 @@ class WebConfig extends WebSecurityConfigurerAdapter {
 
     @Override
     protected void configure(HttpSecurity http) throws Exception {
-        // removes csrf protection for the POST from OKTA which happens on the following URI
+        /* this is actually not needed as the Saml2LoginConfigurer calls a CsrfConfigurer to exclude the POST landing uri
+        from the resources that need to be filtered. However if by any chance there is a misconfiguration one might want to
+        remove csrf for debugging purposes.
+        Note that the POST from OKTA which happens on the following URI:
         String disableCsrfOn = Saml2WebSsoAuthenticationFilter.DEFAULT_FILTER_PROCESSES_URI + "/" + saml2RelyingPartyProperties.getAudienceUri();
+        http.csrf().ignoringAntMatchers(disableCsrfOn);*/
 
-        http.csrf().ignoringAntMatchers(disableCsrfOn);
+        http.logout()
+                .logoutUrl("/logout")
+                .logoutSuccessUrl("/login")
+                .invalidateHttpSession(true)
+                .deleteCookies("JSESSIONID");
 
         // @formatter:off
         final Saml2LoginConfigurer<HttpSecurity> saml2LoginConfigurer = http
                 .authorizeRequests()
                 .antMatchers("/error").permitAll()
+                .antMatchers("favicon.ico").permitAll()
                 .anyRequest().authenticated()
                 .and()
                 .saml2Login();
         saml2LoginConfigurer.relyingPartyRegistrationRepository(
-                        new InMemoryRelyingPartyRegistrationRepository(
-                                getSaml2AuthenticationConfiguration()
-                        )
+                new InMemoryRelyingPartyRegistrationRepository(
+                        getSaml2AuthenticationConfiguration()
                 )
+        )
                 .loginProcessingUrl(Saml2WebSsoAuthenticationFilter.DEFAULT_FILTER_PROCESSES_URI)
-        .failureHandler(new SimpleUrlAuthenticationFailureHandler());
+                .failureHandler(new SimpleUrlAuthenticationFailureHandler());
 
         // adding custom assertion post processor
         LOGGER.info("Adding custom assertion Post-Processor");
@@ -97,8 +106,6 @@ class WebConfig extends WebSecurityConfigurerAdapter {
         saml2LoginConfigurer.addObjectPostProcessor(converter);
         // @formatter:on
     }
-
-
 
     private Saml2X509Credential getVerificationCertificate() {
         try {
@@ -138,7 +145,7 @@ class WebConfig extends WebSecurityConfigurerAdapter {
     }
 
     // Provide location of Java Keystore and password for access
-    private KeyStore getKeyStore (Saml2Properties.Jks jks) throws KeyStoreException, IOException, CertificateException, NoSuchAlgorithmException {
+    private KeyStore getKeyStore(Saml2Properties.Jks jks) throws KeyStoreException, IOException, CertificateException, NoSuchAlgorithmException {
         final Resource keyStoreLocation = jks.getKeyStoreLocation();
         String keyStorePassword = jks.getKeyStorePassword();
 

@@ -15,13 +15,22 @@
   -->
 
 <!doctype html>
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="https://www.thymeleaf.org" xmlns:sec="https://www.thymeleaf.org/thymeleaf-extras-springsecurity5">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="https://www.thymeleaf.org"
+      xmlns:sec="https://www.thymeleaf.org/thymeleaf-extras-springsecurity5">
 <head>
-	<title>Spring Security - SAML 2 Log In</title>
-	<meta charset="utf-8" />
+    <title>Spring Security - SAML 2 Log In</title>
+    <meta charset="utf-8"/>
 </head>
 <body>
-    <h1>Success</h1>
-    <div>You are authenticated as <span sec:authentication="name"></span></div>
+<h1>Successfully logged in</h1>
+<div>
+    You are authenticated as <span sec:authentication="name"></span> and belongs to the following groups:
+    <tr th:each="group : ${groups}">
+        <td th:text="${group}"></td>
+    </tr>
+</div>
+<div>
+    <a href="/logout">Log out </a>
+</div>
 </body>
 </html>

@@ -40,7 +40,7 @@ public class GrantedAuthorityPostProcessor implements ObjectPostProcessor<Authen
         }
     }
 
-    private Converter<Assertion, Collection<? extends GrantedAuthority>> authoritiesExtractor =
+    private final Converter<Assertion, Collection<? extends GrantedAuthority>> authoritiesExtractor =
             (a -> converter(a));
 
     private SimpleGrantedAuthority newAuthority(XMLObject y) {
